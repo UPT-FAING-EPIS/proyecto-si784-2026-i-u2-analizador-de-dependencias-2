@@ -3,6 +3,8 @@ package com.depanalyzer.cli
 import com.depanalyzer.core.ProjectAnalyzer
 import com.depanalyzer.parser.ProjectType
 import com.depanalyzer.repository.OssIndexClient
+import com.depanalyzer.telemetry.TelemetryClient
+import com.depanalyzer.telemetry.TelemetryEvent
 import com.depanalyzer.update.*
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.Context
@@ -65,24 +67,56 @@ class Update(
     ).flag(default = false)
 
     override fun run() {
-        val terminal = if (System.getenv("NO_COLOR") != null) {
-            Terminal(ansiLevel = AnsiLevel.NONE)
-        } else {
-            Terminal(ansiLevel = AnsiLevel.TRUECOLOR)
+        trackCommandAndFlagFeatures()
+
+        try {
+            val terminal = if (System.getenv("NO_COLOR") != null) {
+                Terminal(ansiLevel = AnsiLevel.NONE)
+            } else {
+                Terminal(ansiLevel = AnsiLevel.TRUECOLOR)
+            }
+            val targetPath = path ?: Path.of(".")
+            val results = executeUpdate(
+                targetPath = targetPath,
+                terminal = terminal,
+                dryRun = getDryRunFromCli(),
+                onlySecurity = getOnlySecurityFromCli()
+            )
+            val appliedCount = results.count { it.applied }
+            val omittedCount = results.size - appliedCount
+            if (getDryRunFromCli()) {
+                echo("Resumen final (dry-run): simuladas=$appliedCount, omitidas=$omittedCount")
+            } else {
+                echo("Resumen final: aplicadas=$appliedCount, omitidas=$omittedCount")
+            }
+        } catch (e: Exception) {
+            TelemetryClient.send(
+                TelemetryEvent(
+                    eventType = "error",
+                    errorType = e.javaClass.simpleName,
+                    errorMessage = e.message?.take(200)
+                )
+            )
+            throw e
         }
-        val targetPath = path ?: Path.of(".")
-        val results = executeUpdate(
-            targetPath = targetPath,
-            terminal = terminal,
-            dryRun = getDryRunFromCli(),
-            onlySecurity = getOnlySecurityFromCli()
+    }
+
+    private fun trackCommandAndFlagFeatures() {
+        TelemetryClient.send(
+            TelemetryEvent(
+                eventType = "feature_used",
+                feature = "update_command"
+            )
         )
-        val appliedCount = results.count { it.applied }
-        val omittedCount = results.size - appliedCount
+
+        if (getDynamicFromCli()) {
+            TelemetryClient.send(TelemetryEvent(eventType = "feature_used", feature = "flag_dynamic"))
+        }
         if (getDryRunFromCli()) {
-            echo("Resumen final (dry-run): simuladas=$appliedCount, omitidas=$omittedCount")
-        } else {
-            echo("Resumen final: aplicadas=$appliedCount, omitidas=$omittedCount")
+            TelemetryClient.send(TelemetryEvent(eventType = "feature_used", feature = "flag_dry_run"))
+        }
+        if (getOnlySecurityFromCli()) {
+            TelemetryClient.send(TelemetryEvent(eventType = "feature_used", feature = "flag_only_security"))
         }
     }
 

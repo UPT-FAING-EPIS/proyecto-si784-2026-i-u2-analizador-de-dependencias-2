@@ -5,6 +5,9 @@ import com.depanalyzer.parser.*
 import com.depanalyzer.report.*
 import com.depanalyzer.repository.NvdClient
 import com.depanalyzer.repository.OssIndexClient
+import com.depanalyzer.telemetry.TelemetryClient
+import com.depanalyzer.telemetry.TelemetryConfig
+import com.depanalyzer.telemetry.TelemetryEvent
 import com.depanalyzer.tui.AnalyzeTuiApp
 import com.depanalyzer.tui.TerminalCapabilities
 import com.depanalyzer.tui.TerminalCapabilitiesDetector
@@ -22,8 +25,19 @@ import java.nio.file.Path
 import kotlin.io.path.writeText
 
 class Depanalyzer : CliktCommand() {
+    private val noTelemetry: Boolean by option(
+        "--no-telemetry",
+        help = "Disable anonymous usage telemetry"
+    ).flag(default = false)
+
     override fun help(context: Context): String = "Analizador de Dependencias Java/Kotlin"
-    override fun run() = Unit
+    override fun run() {
+        if (noTelemetry) {
+            TelemetryConfig.disable()
+        }
+
+        TelemetryClient.send(TelemetryEvent(eventType = "app_start"))
+    }
 }
 
 data class AnalyzeExecutionRequest(
@@ -94,6 +108,7 @@ abstract class BaseAnalyzeCommand(
     private val terminalCapabilitiesDetector: TerminalCapabilitiesDetector,
     private val tuiRunner: (TuiLaunchConfig, TerminalCapabilities) -> DependencyReport?
 ) : CliktCommand(name = commandName) {
+    private val telemetryCommandName: String = commandName
     private val path: Path? by argument(help = "Ruta al directorio del proyecto (default: directorio actual)")
         .path(mustExist = true, canBeFile = false)
         .optional()
@@ -169,6 +184,8 @@ abstract class BaseAnalyzeCommand(
         val startTime = System.currentTimeMillis()
         val token = getTokenFromCliOrEnv()
         val nvdApiKey = getNvdApiKeyFromEnv()
+
+        trackCommandAndFlagFeatures()
 
         val expandMode = when (treeExpand?.lowercase()) {
             "collapsed" -> TreeExpandMode.COLLAPSED
@@ -271,6 +288,7 @@ abstract class BaseAnalyzeCommand(
             val report = try {
                 analyzeExecutor(standardRequest)
             } catch (e: Exception) {
+                sendErrorEvent(e)
                 echo("Error durante el análisis: ${e.message}", err = true)
                 return
             }
@@ -290,10 +308,62 @@ abstract class BaseAnalyzeCommand(
             if (failOnCritical && hasCriticalVulnerability(report)) {
                 throw ProgramResult(1)
             }
+        } catch (e: ProgramResult) {
+            throw e
+        } catch (e: Exception) {
+            sendErrorEvent(e)
+            throw e
         } finally {
+            val durationMs = System.currentTimeMillis() - startTime
+            TelemetryClient.send(
+                TelemetryEvent(
+                    eventType = "scan_run",
+                    durationMs = durationMs
+                )
+            )
             ProgressTracker.setMuted(false)
             ProgressTracker.setListener(null)
         }
+    }
+
+    private fun trackCommandAndFlagFeatures() {
+        TelemetryClient.send(
+            TelemetryEvent(
+                eventType = "feature_used",
+                feature = "${telemetryCommandName}_command"
+            )
+        )
+
+        if (tui) trackFeature("flag_tui")
+        if (output != null) trackFeature("flag_output_${output!!.lowercase()}")
+        if (verbose) trackFeature("flag_verbose")
+        if (showChains) trackFeature("flag_show_chains")
+        if (chainDetail) trackFeature("flag_chain_detail")
+        if (offline) trackFeature("flag_offline")
+        if (dynamic) trackFeature("flag_dynamic")
+        if (disableMaven) trackFeature("flag_disable_maven")
+        if (disableGradle) trackFeature("flag_disable_gradle")
+        if (ascii) trackFeature("flag_ascii")
+        if (treeDepth != null) trackFeature("flag_tree_depth")
+        if (treeExpand != null) trackFeature("flag_tree_expand")
+        if (timeout != null) trackFeature("flag_timeout")
+        if (useNvd) trackFeature("flag_use_nvd")
+        if (commandOutput) trackFeature("flag_command_output")
+        if (failOnCritical) trackFeature("flag_fail_on_critical")
+    }
+
+    private fun trackFeature(feature: String) {
+        TelemetryClient.send(TelemetryEvent(eventType = "feature_used", feature = feature))
+    }
+
+    private fun sendErrorEvent(error: Throwable) {
+        TelemetryClient.send(
+            TelemetryEvent(
+                eventType = "error",
+                errorType = error.javaClass.simpleName,
+                errorMessage = error.message?.take(200)
+            )
+        )
     }
 
     private fun buildDynamicForcedMessage(): String {
