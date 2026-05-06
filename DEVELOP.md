@@ -26,6 +26,33 @@ Generar distribucion local:
 ./gradlew installDist
 ```
 
+## Compilación Nativa (GraalVM Native Image)
+
+Compilar el ejecutable nativo:
+
+```bash
+./gradlew nativeCompile
+```
+
+El ejecutable se genera en: `build/native/nativeCompile/depanalyzer` (o `depanalyzer.exe` en Windows)
+
+### Requisitos para compilación nativa
+
+- GraalVM JDK 25+ (con herramientas native-image incluidas)
+- En Windows: Microsoft C++ Build Tools
+- En Linux: gcc y libc-dev
+- En macOS: Xcode Command Line Tools
+
+### Recolectar metadata de runtime (opcional)
+
+Para mejorar la compatibilidad con reflection en runtime:
+
+```bash
+./gradlew -PenableNativeImageAgent=true test nativeCompile
+```
+
+Esto ejecuta los tests con el agente de GraalVM y recopila metadata automáticamente.
+
 ## Tests
 
 ```bash
