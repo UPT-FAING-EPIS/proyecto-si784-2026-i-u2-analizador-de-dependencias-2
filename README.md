@@ -14,7 +14,29 @@ vulnerabilidades (CVE) con OSS Index y, opcionalmente, NIST NVD.
 
 ## Instalacion
 
-### Opcion recomendada (binario nativo)
+### Opcion recomendada (package managers)
+
+Homebrew (macOS/Linux):
+
+```bash
+brew tap andre-carbajal/homebrew-tap
+brew install depanalyzer
+```
+
+Scoop (Windows PowerShell):
+
+```powershell
+scoop bucket add scoop-bucket https://github.com/andre-carbajal/scoop-bucket
+scoop install depanalyzer
+```
+
+Snap (Linux):
+
+```bash
+sudo snap install depanalyzer
+```
+
+### Opcion alternativa (script instalador del repo)
 
 Linux/macOS:
 
@@ -32,6 +54,12 @@ Windows:
 
 - Descarga el `.zip` desde GitHub Releases.
 - Descomprime y ejecuta `depanalyzer.exe`.
+
+### Actualizar desde package manager
+
+- Homebrew: `brew upgrade depanalyzer`
+- Scoop: `scoop update depanalyzer`
+- Snap: `sudo snap refresh depanalyzer`
 
 ## Como obtener y configurar OSS Index
 
