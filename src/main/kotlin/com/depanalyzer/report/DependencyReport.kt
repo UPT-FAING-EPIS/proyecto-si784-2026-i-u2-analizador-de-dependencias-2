@@ -1,6 +1,7 @@
 package com.depanalyzer.report
 
 import com.depanalyzer.core.graph.VulnerabilityChain
+import com.depanalyzer.parser.Ecosystem
 import com.fasterxml.jackson.annotation.JsonInclude
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -17,14 +18,16 @@ data class DependencyReport(
 data class DependencyInfo(
     val groupId: String,
     val artifactId: String,
-    val version: String
+    val version: String,
+    val ecosystem: Ecosystem = Ecosystem.MAVEN
 )
 
 data class OutdatedDependency(
     val groupId: String,
     val artifactId: String,
     val currentVersion: String,
-    val latestVersion: String
+    val latestVersion: String,
+    val ecosystem: Ecosystem = Ecosystem.MAVEN
 )
 
 data class VulnerableDependency(
@@ -32,5 +35,6 @@ data class VulnerableDependency(
     val artifactId: String,
     val version: String,
     val vulnerabilities: List<Vulnerability>,
-    val dependencyChain: List<String>? = null
+    val dependencyChain: List<String>? = null,
+    val ecosystem: Ecosystem = Ecosystem.MAVEN
 )

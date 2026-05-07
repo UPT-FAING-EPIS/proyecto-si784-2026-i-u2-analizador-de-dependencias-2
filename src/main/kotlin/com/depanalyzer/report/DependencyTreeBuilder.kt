@@ -94,7 +94,8 @@ class DependencyTreeBuilder(
             scope = node.scope,
             vulnerabilities = vulns.sortedBy { it.severity.ordinal }.reversed(),
             children = children.sortByDependencyType(),
-            dependencyChain = if (isDirectDep) null else chain
+            dependencyChain = if (isDirectDep) null else chain,
+            ecosystem = node.ecosystem
         )
     }
 

@@ -63,6 +63,30 @@ class ProjectDetectorTest {
     }
 
     @Test
+    fun `should detect npm when package json exists`(@TempDir tempDir: Path) {
+        Files.createFile(tempDir.resolve("package.json"))
+        assertEquals(ProjectType.NPM, detector.detect(tempDir))
+    }
+
+    @Test
+    fun `should detect poetry when pyproject toml exists`(@TempDir tempDir: Path) {
+        Files.createFile(tempDir.resolve("pyproject.toml"))
+        assertEquals(ProjectType.PYTHON_POETRY, detector.detect(tempDir))
+    }
+
+    @Test
+    fun `should detect poetry when poetry lock exists`(@TempDir tempDir: Path) {
+        Files.createFile(tempDir.resolve("poetry.lock"))
+        assertEquals(ProjectType.PYTHON_POETRY, detector.detect(tempDir))
+    }
+
+    @Test
+    fun `should detect requirements project when requirements txt exists`(@TempDir tempDir: Path) {
+        Files.createFile(tempDir.resolve("requirements.txt"))
+        assertEquals(ProjectType.PYTHON_REQUIREMENTS, detector.detect(tempDir))
+    }
+
+    @Test
     fun `should throw error if path is not a directory`(@TempDir tempDir: Path) {
         val file = tempDir.resolve("somefile.txt")
         Files.createFile(file)

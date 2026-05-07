@@ -23,7 +23,8 @@ class DependencyGraphBuilder {
                 groupId = dep.groupId,
                 artifactId = dep.artifactId,
                 version = dep.version ?: "unknown",
-                vulnerabilities = vulns
+                vulnerabilities = vulns,
+                ecosystem = dep.ecosystem
             )
             nodeMap[coordinate] = node
         }

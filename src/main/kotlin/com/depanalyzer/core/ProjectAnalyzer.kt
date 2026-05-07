@@ -6,7 +6,9 @@ import com.depanalyzer.core.graph.ChainResolver
 import com.depanalyzer.core.graph.DependencyGraphBuilder
 import com.depanalyzer.parser.*
 import com.depanalyzer.parser.gradle.GradleIntegration
+import com.depanalyzer.parser.npm.NpmIntegration
 import com.depanalyzer.parser.maven.MavenIntegration
+import com.depanalyzer.parser.python.PythonIntegration
 import com.depanalyzer.report.*
 import com.depanalyzer.repository.*
 import java.io.File
@@ -87,6 +89,21 @@ class ProjectAnalyzer(
                 }
                 Pair(parsedDeps, gradleNodes)
             }
+
+            ProjectType.NPM -> {
+                ProgressTracker.logProcessing("Analizando proyecto Node.js (package.json)...")
+                NpmIntegration.analyzeNpmProject(dirFile)
+            }
+
+            ProjectType.PYTHON_POETRY -> {
+                ProgressTracker.logProcessing("Analizando proyecto Python (pyproject.toml/poetry.lock)...")
+                PythonIntegration.analyzePoetryProject(dirFile)
+            }
+
+            ProjectType.PYTHON_REQUIREMENTS -> {
+                ProgressTracker.logProcessing("Analizando proyecto Python (requirements.txt)...")
+                PythonIntegration.analyzeRequirementsProject(dirFile)
+            }
         }
 
         ProgressTracker.advanceProgress("Resolución de repos")
@@ -106,11 +123,26 @@ class ProjectAnalyzer(
                 val buildFile = File(dirFile, "build.gradle.kts")
                 GradleRepositoryParser().parse(buildFile)
             }
+
+            ProjectType.NPM,
+            ProjectType.PYTHON_POETRY,
+            ProjectType.PYTHON_REQUIREMENTS -> {
+                emptyList()
+            }
         }
 
         val upToDate = mutableListOf<DependencyInfo>()
         val outdated = mutableListOf<OutdatedDependency>()
-        val directDependencies = mutableListOf<ParsedDependency>()
+        val directDependencies = rootNodes.map { root ->
+            ParsedDependency(
+                groupId = root.groupId,
+                artifactId = root.artifactId,
+                version = root.version,
+                scope = root.scope ?: "compile",
+                section = if (root.isDependencyManagement) DependencySection.DEPENDENCY_MANAGEMENT else DependencySection.DEPENDENCIES,
+                ecosystem = root.ecosystem
+            )
+        }.distinctBy { "${it.ecosystem}:${it.groupId}:${it.artifactId}:${it.version}" }
 
         val initialTree = buildDependencyTree(
             vulnerabilityMap = emptyMap(),
@@ -128,19 +160,40 @@ class ProjectAnalyzer(
         )
 
         ProgressTracker.advanceProgress("Consulta de versiones")
-        val distinctDependencies = dependencies.distinctBy { "${it.groupId}:${it.artifactId}" }
+        val distinctDependencies = dependencies.distinctBy { "${it.ecosystem}:${it.groupId}:${it.artifactId}" }
         distinctDependencies.forEachIndexed { index, dep ->
             val currentVersion = dep.version
             if (currentVersion != null && !isVariable(currentVersion)) {
-                directDependencies.add(dep)
-                val latest = findLatestVersion(repositories, dep.groupId, dep.artifactId)
+                val latest = findLatestVersion(repositories, dep)
                 if (latest != null && latest != currentVersion) {
-                    outdated.add(OutdatedDependency(dep.groupId, dep.artifactId, currentVersion, latest))
+                    outdated.add(
+                        OutdatedDependency(
+                            groupId = dep.groupId,
+                            artifactId = dep.artifactId,
+                            currentVersion = currentVersion,
+                            latestVersion = latest,
+                            ecosystem = dep.ecosystem
+                        )
+                    )
                 } else {
-                    upToDate.add(DependencyInfo(dep.groupId, dep.artifactId, currentVersion))
+                    upToDate.add(
+                        DependencyInfo(
+                            groupId = dep.groupId,
+                            artifactId = dep.artifactId,
+                            version = currentVersion,
+                            ecosystem = dep.ecosystem
+                        )
+                    )
                 }
             } else {
-                upToDate.add(DependencyInfo(dep.groupId, dep.artifactId, currentVersion ?: "unknown"))
+                upToDate.add(
+                    DependencyInfo(
+                        groupId = dep.groupId,
+                        artifactId = dep.artifactId,
+                        version = currentVersion ?: "unknown",
+                        ecosystem = dep.ecosystem
+                    )
+                )
             }
 
             val shouldEmitProgressiveSnapshot = onPartialReport != null &&
@@ -187,6 +240,8 @@ class ProjectAnalyzer(
 
         ProgressTracker.logSecurity("Consultando vulnerabilidades...")
         ProgressTracker.advanceProgress("CVEs")
+        val mavenDependencies = dependencies.filter { it.ecosystem == Ecosystem.MAVEN }
+        val hasNonMaven = dependencies.any { it.ecosystem != Ecosystem.MAVEN }
         val vulnerabilityMap = when (vulnerabilitySourceMode) {
             VulnerabilitySourceMode.OSS_ONLY -> {
                 try {
@@ -197,28 +252,42 @@ class ProjectAnalyzer(
             }
 
             VulnerabilitySourceMode.NVD_ONLY -> {
+                if (mavenDependencies.isEmpty()) {
+                    ProgressTracker.logWarning("NVD solo aplica a dependencias Maven. CVE analysis skipped.")
+                    emptyMap()
+                } else {
                 try {
-                    nvdClient.getVulnerabilities(dependencies)
+                    nvdClient.getVulnerabilities(mavenDependencies)
                 } catch (e: Exception) {
                     throw IllegalStateException("[NVD] no se pudo obtener vulnerabilidades: ${e.message}", e)
+                }
                 }
             }
 
             VulnerabilitySourceMode.AUTO -> {
                 val ossVulns = runCatching { ossIndexClient.getVulnerabilities(dependencies) }.getOrNull()
                 if (ossVulns != null) {
-                    val nvdVulns = runCatching {
-                        ProgressTracker.logSecurity("Enriqueciendo con datos de NVD...")
-                        nvdClient.getVulnerabilities(dependencies)
-                    }.getOrElse {
-                        if (verbose) {
-                            System.err.println("  NVD enrichment failed: ${it.message}")
+                    val nvdVulns = if (mavenDependencies.isNotEmpty()) {
+                        runCatching {
+                            ProgressTracker.logSecurity("Enriqueciendo con datos de NVD...")
+                            nvdClient.getVulnerabilities(mavenDependencies)
+                        }.getOrElse {
+                            if (verbose) {
+                                System.err.println("  NVD enrichment failed: ${it.message}")
+                            }
+                            emptyMap()
+                        }
+                    } else {
+                        if (hasNonMaven && verbose) {
+                            System.err.println("  NVD enrichment skipped for non-Maven ecosystems")
                         }
                         emptyMap()
                     }
                     VulnerabilityMerger.mergeVulnerabilities(ossVulns, nvdVulns)
                 } else {
-                    runCatching { nvdClient.getVulnerabilities(dependencies) }
+                    runCatching {
+                        if (mavenDependencies.isEmpty()) emptyMap() else nvdClient.getVulnerabilities(mavenDependencies)
+                    }
                         .getOrElse {
                             ProgressTracker.logWarning("No se pudo consultar OSS ni NVD. Vulnerability analysis skipped.")
                             if (verbose) {
@@ -331,7 +400,8 @@ class ProjectAnalyzer(
                 artifactId = dep.artifactId,
                 version = dep.version!!,
                 vulnerabilities = vulnerabilities,
-                dependencyChain = buildDependencyChain(coordinates, dependencies, directDependencies)
+                dependencyChain = buildDependencyChain(coordinates, dependencies, directDependencies),
+                ecosystem = dep.ecosystem
             )
 
             if (coordinates in directCoordinates) {
@@ -374,15 +444,15 @@ class ProjectAnalyzer(
         return ChainResolver.resolveAllChains(graph, vulnerabilityMap)
     }
 
-    private fun findLatestVersion(repos: List<ProjectRepository>, groupId: String, artifactId: String): String? {
-        for (repo in repos) {
-            val version = repositoryClient.getLatestVersion(repo, groupId, artifactId)
-            if (version != null) return version
-        }
-        return null
+    private fun findLatestVersion(repos: List<ProjectRepository>, dependency: ParsedDependency): String? {
+        return repositoryClient.getLatestVersion(dependency, repos)
     }
 
-    private fun isVariable(version: String): Boolean = version.startsWith("$") || version.startsWith($$"${")
+    private fun isVariable(version: String): Boolean {
+        return version.startsWith("$") ||
+                version.startsWith($$"${") ||
+                version.any { it in "^~><=*!,| " }
+    }
 
     private fun flattenNodeTree(node: com.depanalyzer.core.graph.DependencyNode): List<ParsedDependency> {
         val result = mutableListOf<ParsedDependency>()
@@ -393,7 +463,8 @@ class ProjectAnalyzer(
                 artifactId = node.artifactId,
                 version = node.version,
                 scope = node.scope ?: "compile",
-                section = if (node.isDependencyManagement) DependencySection.DEPENDENCY_MANAGEMENT else DependencySection.DEPENDENCIES
+                section = if (node.isDependencyManagement) DependencySection.DEPENDENCY_MANAGEMENT else DependencySection.DEPENDENCIES,
+                ecosystem = node.ecosystem
             )
         )
 

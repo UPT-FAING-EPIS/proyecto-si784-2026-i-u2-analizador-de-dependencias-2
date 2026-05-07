@@ -2,6 +2,9 @@ package com.depanalyzer.cli
 
 import com.depanalyzer.core.ProjectAnalyzer
 import com.depanalyzer.parser.*
+import com.depanalyzer.parser.npm.NpmPackageParser
+import com.depanalyzer.parser.python.PyprojectPoetryParser
+import com.depanalyzer.parser.python.RequirementsParser
 import com.depanalyzer.report.*
 import com.depanalyzer.repository.NvdClient
 import com.depanalyzer.repository.OssIndexClient
@@ -30,7 +33,7 @@ class Depanalyzer : CliktCommand() {
         help = "Disable anonymous usage telemetry"
     ).flag(default = false)
 
-    override fun help(context: Context): String = "Analizador de Dependencias Java/Kotlin"
+    override fun help(context: Context): String = "Analizador de Dependencias multi-ecosistema"
     override fun run() {
         if (noTelemetry) {
             TelemetryConfig.disable()
@@ -434,6 +437,65 @@ abstract class BaseAnalyzeCommand(
                             )
                         }
                 }
+
+                ProjectType.NPM -> {
+                    val packageFile = File(projectDir, "package.json")
+                    NpmPackageParser()
+                        .parse(packageFile)
+                        .distinctBy { "${it.groupId}:${it.artifactId}" }
+                        .map { dep ->
+                            DependencyTreeNode(
+                                groupId = dep.groupId,
+                                artifactId = dep.artifactId,
+                                currentVersion = dep.version ?: "unknown",
+                                isDirectDependency = true,
+                                scope = dep.scope,
+                                ecosystem = dep.ecosystem
+                            )
+                        }
+                }
+
+                ProjectType.PYTHON_POETRY -> {
+                    val pyprojectFile = File(projectDir, "pyproject.toml")
+                    if (!pyprojectFile.exists()) {
+                        emptyList()
+                    } else {
+                        PyprojectPoetryParser()
+                            .parse(pyprojectFile)
+                            .distinctBy { "${it.groupId}:${it.artifactId}" }
+                            .map { dep ->
+                                DependencyTreeNode(
+                                    groupId = dep.groupId,
+                                    artifactId = dep.artifactId,
+                                    currentVersion = dep.version ?: "unknown",
+                                    isDirectDependency = true,
+                                    scope = dep.scope,
+                                    ecosystem = dep.ecosystem
+                                )
+                            }
+                    }
+                }
+
+                ProjectType.PYTHON_REQUIREMENTS -> {
+                    val requirementsFile = File(projectDir, "requirements.txt")
+                    if (!requirementsFile.exists()) {
+                        emptyList()
+                    } else {
+                        RequirementsParser()
+                            .parse(requirementsFile)
+                            .distinctBy { "${it.groupId}:${it.artifactId}" }
+                            .map { dep ->
+                                DependencyTreeNode(
+                                    groupId = dep.groupId,
+                                    artifactId = dep.artifactId,
+                                    currentVersion = dep.version ?: "unknown",
+                                    isDirectDependency = true,
+                                    scope = dep.scope,
+                                    ecosystem = dep.ecosystem
+                                )
+                            }
+                    }
+                }
             }
 
             DependencyReport(
@@ -482,6 +544,9 @@ abstract class BaseAnalyzeCommand(
             ProjectType.MAVEN -> File(projectDir, "pom.xml")
             ProjectType.GRADLE_GROOVY -> File(projectDir, "build.gradle")
             ProjectType.GRADLE_KOTLIN -> File(projectDir, "build.gradle.kts")
+            ProjectType.NPM -> File(projectDir, "package.json")
+            ProjectType.PYTHON_POETRY -> File(projectDir, "pyproject.toml")
+            ProjectType.PYTHON_REQUIREMENTS -> File(projectDir, "requirements.txt")
         }
     }
 
@@ -490,6 +555,9 @@ abstract class BaseAnalyzeCommand(
             ProjectType.MAVEN -> PomBuildFileUpdater()
             ProjectType.GRADLE_GROOVY -> GradleGroovyBuildFileUpdater()
             ProjectType.GRADLE_KOTLIN -> GradleKotlinBuildFileUpdater()
+            ProjectType.NPM -> NpmPackageJsonBuildFileUpdater()
+            ProjectType.PYTHON_POETRY -> PyprojectBuildFileUpdater()
+            ProjectType.PYTHON_REQUIREMENTS -> RequirementsBuildFileUpdater()
         }
     }
 

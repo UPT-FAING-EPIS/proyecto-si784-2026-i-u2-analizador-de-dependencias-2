@@ -1,15 +1,18 @@
-# Analizador de Dependencias Java
+# Analizador de Dependencias Multi-Lenguaje
 
-Herramienta CLI para analizar proyectos Java (Maven/Gradle), detectar dependencias desactualizadas y encontrar
-vulnerabilidades (CVE) con OSS Index y, opcionalmente, NIST NVD.
+Herramienta CLI para analizar proyectos Java (Maven/Gradle), JavaScript/TypeScript (npm) y Python
+(Poetry/requirements.txt), detectar dependencias desactualizadas y encontrar vulnerabilidades (CVE) con OSS Index
+y, opcionalmente, NIST NVD para ecosistema Maven.
 
 ## Caracteristicas
 
 - Soporta Maven (`pom.xml`), Gradle Groovy (`build.gradle`) y Gradle Kotlin (`build.gradle.kts`).
+- Soporta npm (`package.json` + `package-lock.json`) para proyectos JavaScript/TypeScript.
+- Soporta Python con Poetry (`pyproject.toml` + `poetry.lock`) y `requirements.txt`.
 - Detecta automaticamente el tipo de proyecto.
 - Identifica dependencias desactualizadas y sugiere versiones mas nuevas.
-- Detecta vulnerabilidades CVE via OSS Index.
-- Enriquece CVEs con NIST NVD (CVSS v3 y metadata oficial).
+- Detecta vulnerabilidades CVE via OSS Index (Maven, npm y PyPI).
+- Enriquece CVEs con NIST NVD (CVSS v3 y metadata oficial) para Maven.
 - Incluye modo interactivo (`tui`) y modo de actualizacion asistida (`update`).
 
 ## Instalacion

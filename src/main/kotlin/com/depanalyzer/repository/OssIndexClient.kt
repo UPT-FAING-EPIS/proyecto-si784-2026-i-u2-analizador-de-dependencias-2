@@ -1,6 +1,7 @@
 ﻿package com.depanalyzer.repository
 
 import com.depanalyzer.parser.ParsedDependency
+import com.depanalyzer.parser.Ecosystem
 import com.depanalyzer.report.AffectedDependency
 import com.depanalyzer.report.Vulnerability
 import okhttp3.HttpUrl
@@ -12,6 +13,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.json.JsonMapper
 import java.io.IOException
+import java.net.URLDecoder
+import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 import kotlin.math.pow
 
@@ -45,11 +48,9 @@ class OssIndexClient(
         val result = mutableMapOf<String, List<Vulnerability>>()
 
         val componentCoordinates = dependencies.mapNotNull { dep ->
-            if (dep.version != null && !isVariableVersion(dep.version)) {
-                "pkg:maven/${dep.groupId}/${dep.artifactId}@${dep.version}"
-            } else {
-                null
-            }
+            val version = dep.version ?: return@mapNotNull null
+            if (isVariableVersion(version)) return@mapNotNull null
+            dependencyToPurl(dep, version)
         }.distinct()
 
         if (componentCoordinates.isEmpty()) {
@@ -70,14 +71,7 @@ class OssIndexClient(
                             )
                         }
 
-                        var coordinateKey = report.coordinates
-                        if (coordinateKey.startsWith("pkg:maven/")) {
-                            val cleanPurl = coordinateKey.substringBefore("?")
-                            val parts = cleanPurl.substringAfter("pkg:maven/").split("/", "@")
-                            if (parts.size == 3) {
-                                coordinateKey = "${parts[0]}:${parts[1]}:${parts[2]}"
-                            }
-                        }
+                        val coordinateKey = coordinateToKey(report.coordinates) ?: report.coordinates
 
                         result[coordinateKey] = vulnerabilities
                     }
@@ -141,7 +135,29 @@ class OssIndexClient(
 
     private fun isVariableVersion(version: String): Boolean {
         val dollarSign = "$"
-        return version.startsWith(dollarSign) || version.startsWith(dollarSign + "{")
+        return version.startsWith(dollarSign) ||
+                version.startsWith(dollarSign + "{") ||
+                version.any { it in "^~><=*!,| " }
+    }
+
+    private fun dependencyToPurl(dep: ParsedDependency, version: String): String? {
+        return when (dep.ecosystem) {
+            Ecosystem.MAVEN -> "pkg:maven/${dep.groupId}/${dep.artifactId}@$version"
+            Ecosystem.NPM -> {
+                if (dep.groupId == "npm") {
+                    "pkg:npm/${encode(dep.artifactId)}@$version"
+                } else {
+                    "pkg:npm/${encode(dep.groupId)}/${encode(dep.artifactId)}@$version"
+                }
+            }
+
+            Ecosystem.PYPI -> "pkg:pypi/${encode(dep.artifactId)}@$version"
+        }
+    }
+
+    private fun coordinateToKey(coordinate: String): String? {
+        val parsed = parseCoordinate(coordinate) ?: return null
+        return "${parsed.groupId}:${parsed.artifactId}:${parsed.version}"
     }
 
     private fun parseComponentReports(body: String): List<ComponentReportResponse> {
@@ -203,34 +219,85 @@ class OssIndexClient(
     }
 
     private fun parseAffectedDependency(coordinates: String): AffectedDependency {
-        try {
-            val cleanCoords = coordinates.substringBefore("?")
+        val parsed = parseCoordinate(coordinates)
+            ?: throw IllegalArgumentException("Unable to parse coordinates: $coordinates")
 
-            // Try PURL format first
-            if (cleanCoords.startsWith("pkg:maven/")) {
-                val parts = cleanCoords.substringAfter("pkg:maven/").split("/", "@")
-                if (parts.size == 3) {
-                    return AffectedDependency(
-                        groupId = parts[0],
-                        artifactId = parts[1],
-                        version = parts[2]
+        return AffectedDependency(
+            groupId = parsed.groupId,
+            artifactId = parsed.artifactId,
+            version = parsed.version,
+            ecosystem = parsed.ecosystem
+        )
+    }
+
+    private data class ParsedCoordinate(
+        val ecosystem: Ecosystem,
+        val groupId: String,
+        val artifactId: String,
+        val version: String
+    )
+
+    private fun parseCoordinate(coordinates: String): ParsedCoordinate? {
+        val cleanCoords = coordinates.substringBefore("?")
+
+        if (cleanCoords.startsWith("pkg:")) {
+            val type = cleanCoords.substringAfter("pkg:").substringBefore('/')
+            val path = cleanCoords.substringAfter("$type/")
+            val packagePart = path.substringBefore('@')
+            val version = path.substringAfter('@', "").takeIf { it.isNotBlank() } ?: return null
+
+            return when (type) {
+                "maven" -> {
+                    val parts = packagePart.split('/')
+                    if (parts.size < 2) return null
+                    ParsedCoordinate(
+                        ecosystem = Ecosystem.MAVEN,
+                        groupId = decode(parts[0]),
+                        artifactId = decode(parts[1]),
+                        version = version
                     )
                 }
-            }
 
-            // Try Maven Central format (groupId:artifactId:version)
-            val parts = cleanCoords.split(":")
-            if (parts.size == 3) {
-                return AffectedDependency(
-                    groupId = parts[0],
-                    artifactId = parts[1],
-                    version = parts[2]
+                "npm" -> {
+                    val decoded = decode(packagePart)
+                    val (groupId, artifactId) = if (decoded.startsWith("@") && decoded.contains('/')) {
+                        decoded.substringBefore('/') to decoded.substringAfter('/')
+                    } else {
+                        "npm" to decoded
+                    }
+                    ParsedCoordinate(
+                        ecosystem = Ecosystem.NPM,
+                        groupId = groupId,
+                        artifactId = artifactId,
+                        version = version
+                    )
+                }
+
+                "pypi" -> ParsedCoordinate(
+                    ecosystem = Ecosystem.PYPI,
+                    groupId = "pypi",
+                    artifactId = decode(packagePart),
+                    version = version
                 )
-            }
 
-            throw IllegalArgumentException("Unable to parse coordinates: $coordinates")
-        } catch (e: Exception) {
-            throw IllegalArgumentException("Failed to parse Maven coordinates from: $coordinates", e)
+                else -> null
+            }
         }
+
+        val parts = cleanCoords.split(":")
+        if (parts.size == 3) {
+            return ParsedCoordinate(
+                ecosystem = Ecosystem.MAVEN,
+                groupId = parts[0],
+                artifactId = parts[1],
+                version = parts[2]
+            )
+        }
+
+        return null
     }
+
+    private fun encode(value: String): String = URLEncoder.encode(value, Charsets.UTF_8).replace("+", "%20")
+
+    private fun decode(value: String): String = URLDecoder.decode(value, Charsets.UTF_8)
 }

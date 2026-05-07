@@ -1,13 +1,17 @@
 package com.depanalyzer.repository
 
+import com.depanalyzer.parser.Ecosystem
+import com.depanalyzer.parser.ParsedDependency
 import com.depanalyzer.security.InputSafety
 import okhttp3.Credentials
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.w3c.dom.Element
 import org.xml.sax.InputSource
+import tools.jackson.databind.json.JsonMapper
 import java.io.IOException
 import java.io.StringReader
+import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 import javax.xml.parsers.DocumentBuilderFactory
 
@@ -27,6 +31,25 @@ class RepositoryClient(
         val versions: List<String>
     )
 
+    private val jsonMapper = JsonMapper.builder().build()
+
+    fun getLatestVersion(dependency: ParsedDependency, repositories: List<ProjectRepository> = emptyList()): String? {
+        return when (dependency.ecosystem) {
+            Ecosystem.MAVEN -> repositories.firstNotNullOfOrNull { repo ->
+                getLatestVersion(repo, dependency.groupId, dependency.artifactId)
+            }
+
+            Ecosystem.NPM -> {
+                val packageName = dependency.packageName
+                getLatestNpmVersion(packageName)
+            }
+
+            Ecosystem.PYPI -> {
+                getLatestPypiVersion(dependency.packageName)
+            }
+        }
+    }
+
     fun getLatestVersion(repository: ProjectRepository, groupId: String, artifactId: String): String? {
         val metadata = fetchMetadata(repository, groupId, artifactId) ?: return null
         val candidates = buildList {
@@ -38,6 +61,42 @@ class RepositoryClient(
         return candidates
             .map(String::trim)
             .firstOrNull(InputSafety::isSafeVersion)
+    }
+
+    private fun getLatestNpmVersion(packageName: String): String? {
+        val encodedName = URLEncoder.encode(packageName, Charsets.UTF_8).replace("+", "%20")
+        val url = "https://registry.npmjs.org/$encodedName"
+        val request = Request.Builder().url(url).build()
+
+        return try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return null
+                val body = response.body.string()
+                val root = jsonMapper.readTree(body)
+                val latest = root.path("dist-tags").path("latest").asText().trim()
+                latest.takeIf(InputSafety::isSafeVersion)
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun getLatestPypiVersion(packageName: String): String? {
+        val encodedName = URLEncoder.encode(packageName, Charsets.UTF_8).replace("+", "%20")
+        val url = "https://pypi.org/pypi/$encodedName/json"
+        val request = Request.Builder().url(url).build()
+
+        return try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return null
+                val body = response.body.string()
+                val root = jsonMapper.readTree(body)
+                val latest = root.path("info").path("version").asText().trim()
+                latest.takeIf(InputSafety::isSafeVersion)
+            }
+        } catch (_: Exception) {
+            null
+        }
     }
 
     private fun fetchMetadata(

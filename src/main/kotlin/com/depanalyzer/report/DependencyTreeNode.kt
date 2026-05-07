@@ -1,5 +1,6 @@
 package com.depanalyzer.report
 
+import com.depanalyzer.parser.Ecosystem
 import com.fasterxml.jackson.annotation.JsonInclude
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -13,7 +14,8 @@ data class DependencyTreeNode(
     val scope: String? = null,
     val vulnerabilities: List<Vulnerability> = emptyList(),
     val children: List<DependencyTreeNode> = emptyList(),
-    val dependencyChain: List<String>? = null
+    val dependencyChain: List<String>? = null,
+    val ecosystem: Ecosystem = Ecosystem.MAVEN
 ) {
     val coordinate: String get() = "$groupId:$artifactId:$currentVersion"
     val hasOutdated: Boolean get() = latestVersion != null

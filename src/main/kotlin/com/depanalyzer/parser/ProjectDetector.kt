@@ -24,6 +24,20 @@ class ProjectDetector {
             return ProjectType.MAVEN
         }
 
-        throw IllegalStateException("No known build files (pom.xml, build.gradle, build.gradle.kts) found in $directory")
+        if (File(dirFile, "package.json").exists()) {
+            return ProjectType.NPM
+        }
+
+        if (File(dirFile, "pyproject.toml").exists() || File(dirFile, "poetry.lock").exists()) {
+            return ProjectType.PYTHON_POETRY
+        }
+
+        if (File(dirFile, "requirements.txt").exists()) {
+            return ProjectType.PYTHON_REQUIREMENTS
+        }
+
+        throw IllegalStateException(
+            "No known build files (pom.xml, build.gradle, build.gradle.kts, package.json, pyproject.toml, requirements.txt) found in $directory"
+        )
     }
 }

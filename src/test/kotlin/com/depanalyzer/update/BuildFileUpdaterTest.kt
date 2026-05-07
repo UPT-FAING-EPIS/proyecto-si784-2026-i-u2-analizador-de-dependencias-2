@@ -455,6 +455,64 @@ class BuildFileUpdaterTest {
         assertEquals(original, build.readText())
     }
 
+    @Test
+    fun `npm updater updates direct dependency preserving caret`() {
+        val dir = Files.createTempDirectory("npm-updater")
+        val packageJson = dir.resolve("package.json").toFile()
+        packageJson.writeText(
+            """
+            {
+              "dependencies": {
+                "lodash": "^4.17.20"
+              }
+            }
+            """.trimIndent()
+        )
+
+        val updated = NpmPackageJsonBuildFileUpdater().applyUpdate(
+            packageJson,
+            UpdateSuggestion("npm", "lodash", "4.17.20", "4.17.21", UpdateReason.OUTDATED)
+        )
+
+        assertTrue(updated)
+        assertTrue(packageJson.readText().contains("\"lodash\" : \"^4.17.21\""))
+    }
+
+    @Test
+    fun `pyproject updater updates poetry dependency`() {
+        val dir = Files.createTempDirectory("pyproject-updater")
+        val pyproject = dir.resolve("pyproject.toml").toFile()
+        pyproject.writeText(
+            """
+            [tool.poetry.dependencies]
+            requests = "^2.31.0"
+            """.trimIndent()
+        )
+
+        val updated = PyprojectBuildFileUpdater().applyUpdate(
+            pyproject,
+            UpdateSuggestion("pypi", "requests", "2.31.0", "2.32.3", UpdateReason.OUTDATED)
+        )
+
+        assertTrue(updated)
+        assertTrue(pyproject.readText().contains("requests = \"^2.32.3\""))
+    }
+
+    @Test
+    fun `requirements updater pins new version`() {
+        val dir = Files.createTempDirectory("requirements-updater")
+        val requirements = dir.resolve("requirements.txt").toFile()
+        requirements.writeText("requests==2.31.0\n")
+
+        val updated = RequirementsBuildFileUpdater().applyUpdate(
+            requirements,
+            UpdateSuggestion("pypi", "requests", "2.31.0", "2.32.3", UpdateReason.OUTDATED)
+        )
+
+        assertTrue(updated)
+        assertEquals("requests==2.32.3\n", requirements.readText())
+    }
+
     private fun copyPomFixture(resourcePath: String): File {
         val dir = Files.createTempDirectory("pom-updater-fixture")
         val pom = dir.resolve("pom.xml")

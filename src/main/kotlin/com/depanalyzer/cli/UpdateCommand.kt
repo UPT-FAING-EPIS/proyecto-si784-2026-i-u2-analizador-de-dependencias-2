@@ -39,6 +39,9 @@ class Update(
             ProjectType.MAVEN -> PomBuildFileUpdater()
             ProjectType.GRADLE_GROOVY -> GradleGroovyBuildFileUpdater()
             ProjectType.GRADLE_KOTLIN -> GradleKotlinBuildFileUpdater()
+            ProjectType.NPM -> NpmPackageJsonBuildFileUpdater()
+            ProjectType.PYTHON_POETRY -> PyprojectBuildFileUpdater()
+            ProjectType.PYTHON_REQUIREMENTS -> RequirementsBuildFileUpdater()
         }
     },
     private val selectionProvider: (Terminal, List<UpdateSuggestion>) -> Set<UpdateSuggestion> = ::defaultSelectionProvider

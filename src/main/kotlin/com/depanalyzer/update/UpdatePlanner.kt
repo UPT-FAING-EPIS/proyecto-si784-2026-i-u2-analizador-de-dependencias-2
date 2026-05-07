@@ -2,6 +2,9 @@ package com.depanalyzer.update
 
 import com.depanalyzer.core.ProjectAnalyzer
 import com.depanalyzer.parser.*
+import com.depanalyzer.parser.npm.NpmPackageParser
+import com.depanalyzer.parser.python.PyprojectPoetryParser
+import com.depanalyzer.parser.python.RequirementsParser
 import java.io.File
 import java.nio.file.Path
 
@@ -25,7 +28,10 @@ class AnalyzerUpdatePlanner(
     private val detector: ProjectDetector = ProjectDetector(),
     private val pomParser: PomDependencyParser = PomDependencyParser(),
     private val gradleGroovyParser: GradleGroovyDependencyParser = GradleGroovyDependencyParser(),
-    private val gradleKotlinParser: GradleKotlinDependencyParser = GradleKotlinDependencyParser()
+    private val gradleKotlinParser: GradleKotlinDependencyParser = GradleKotlinDependencyParser(),
+    private val npmPackageParser: NpmPackageParser = NpmPackageParser(),
+    private val pyprojectParser: PyprojectPoetryParser = PyprojectPoetryParser(),
+    private val requirementsParser: RequirementsParser = RequirementsParser()
 ) : UpdatePlanner {
     override fun plan(projectDir: Path, options: UpdateAnalysisOptions): UpdatePlan {
         val projectType = detector.detect(projectDir)
@@ -61,7 +67,8 @@ class AnalyzerUpdatePlanner(
                     currentVersion = outdated.currentVersion,
                     newVersion = outdated.latestVersion,
                     reason = reason,
-                    targetType = UpdateTargetType.DIRECT
+                    targetType = UpdateTargetType.DIRECT,
+                    ecosystem = outdated.ecosystem
                 )
             }
 
@@ -120,7 +127,8 @@ class AnalyzerUpdatePlanner(
                                 newVersion = latest,
                                 reason = reason,
                                 targetType = UpdateTargetType.TRANSITIVE_OVERRIDE,
-                                viaDirectCoordinate = rootNode.coordinate.substringBeforeLast(":")
+                                viaDirectCoordinate = rootNode.coordinate.substringBeforeLast(":"),
+                                ecosystem = node.ecosystem
                             )
                         )
                     }
@@ -140,6 +148,9 @@ class AnalyzerUpdatePlanner(
             ProjectType.MAVEN -> File(dir, "pom.xml")
             ProjectType.GRADLE_GROOVY -> File(dir, "build.gradle")
             ProjectType.GRADLE_KOTLIN -> File(dir, "build.gradle.kts")
+            ProjectType.NPM -> File(dir, "package.json")
+            ProjectType.PYTHON_POETRY -> File(dir, "pyproject.toml")
+            ProjectType.PYTHON_REQUIREMENTS -> File(dir, "requirements.txt")
         }
     }
 
@@ -160,6 +171,24 @@ class AnalyzerUpdatePlanner(
 
             ProjectType.GRADLE_KOTLIN -> {
                 gradleKotlinParser.parse(buildFile)
+                    .map { "${it.groupId}:${it.artifactId}" }
+                    .toSet()
+            }
+
+            ProjectType.NPM -> {
+                npmPackageParser.parse(buildFile)
+                    .map { "${it.groupId}:${it.artifactId}" }
+                    .toSet()
+            }
+
+            ProjectType.PYTHON_POETRY -> {
+                pyprojectParser.parse(buildFile)
+                    .map { "${it.groupId}:${it.artifactId}" }
+                    .toSet()
+            }
+
+            ProjectType.PYTHON_REQUIREMENTS -> {
+                requirementsParser.parse(buildFile)
                     .map { "${it.groupId}:${it.artifactId}" }
                     .toSet()
             }

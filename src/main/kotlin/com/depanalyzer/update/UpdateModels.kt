@@ -1,5 +1,7 @@
 package com.depanalyzer.update
 
+import com.depanalyzer.parser.Ecosystem
+
 data class UpdateSuggestion(
     val groupId: String,
     val artifactId: String,
@@ -7,7 +9,8 @@ data class UpdateSuggestion(
     val newVersion: String,
     val reason: UpdateReason,
     val targetType: UpdateTargetType = UpdateTargetType.DIRECT,
-    val viaDirectCoordinate: String? = null
+    val viaDirectCoordinate: String? = null,
+    val ecosystem: Ecosystem = Ecosystem.MAVEN
 ) {
     val coordinate: String
         get() = "$groupId:$artifactId"

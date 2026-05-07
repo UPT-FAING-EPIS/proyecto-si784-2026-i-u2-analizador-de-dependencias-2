@@ -1,5 +1,6 @@
 package com.depanalyzer.core.graph
 
+import com.depanalyzer.parser.Ecosystem
 import com.depanalyzer.report.Vulnerability
 
 data class DependencyNode(
@@ -11,7 +12,8 @@ data class DependencyNode(
     val children: MutableList<DependencyNode> = mutableListOf(),
     val vulnerabilities: List<Vulnerability> = emptyList(),
     val scope: String? = null,
-    val isDependencyManagement: Boolean = false
+    val isDependencyManagement: Boolean = false,
+    val ecosystem: Ecosystem = Ecosystem.MAVEN
 ) {
 
     val coordinate: String
