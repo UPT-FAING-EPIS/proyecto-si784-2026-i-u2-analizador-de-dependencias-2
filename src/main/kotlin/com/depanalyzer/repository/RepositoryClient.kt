@@ -73,7 +73,7 @@ class RepositoryClient(
                 if (!response.isSuccessful) return null
                 val body = response.body.string()
                 val root = jsonMapper.readTree(body)
-                val latest = root.path("dist-tags").path("latest").asText().trim()
+                val latest = root.path("dist-tags").path("latest").textOrEmpty()
                 latest.takeIf(InputSafety::isSafeVersion)
             }
         } catch (_: Exception) {
@@ -91,7 +91,7 @@ class RepositoryClient(
                 if (!response.isSuccessful) return null
                 val body = response.body.string()
                 val root = jsonMapper.readTree(body)
-                val latest = root.path("info").path("version").asText().trim()
+                val latest = root.path("info").path("version").textOrEmpty()
                 latest.takeIf(InputSafety::isSafeVersion)
             }
         } catch (_: Exception) {
@@ -146,7 +146,7 @@ class RepositoryClient(
 
             val latest = firstText(root, "latest")
             val release = firstText(root, "release")
-            val versions = allTexts(root, "version")
+            val versions = allVersionTexts(root)
 
             MavenMetadataValues(
                 latest = latest,
@@ -162,8 +162,8 @@ class RepositoryClient(
         return nodes.item(0)?.textContent?.trim()?.takeIf { it.isNotEmpty() }
     }
 
-    private fun allTexts(root: Element, tagName: String): List<String> {
-        val nodes = root.getElementsByTagName(tagName)
+    private fun allVersionTexts(root: Element): List<String> {
+        val nodes = root.getElementsByTagName("version")
         val values = mutableListOf<String>()
         for (index in 0 until nodes.length) {
             val value = nodes.item(index)?.textContent?.trim()
@@ -172,6 +172,13 @@ class RepositoryClient(
             }
         }
         return values
+    }
+
+    private fun tools.jackson.databind.JsonNode.textOrEmpty(): String = scalarText().trim()
+
+    private fun tools.jackson.databind.JsonNode.scalarText(): String = when {
+        isNull || isMissingNode -> ""
+        else -> toString().removeSurrounding("\"")
     }
 
     private fun buildMetadataUrl(baseUrl: String, groupId: String, artifactId: String): String {

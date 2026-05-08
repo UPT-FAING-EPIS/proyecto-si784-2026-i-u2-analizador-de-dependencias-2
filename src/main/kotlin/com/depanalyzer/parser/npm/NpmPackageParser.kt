@@ -34,7 +34,7 @@ class NpmPackageParser {
             val packageName = entry.key.trim()
             if (packageName.isBlank()) return@mapNotNull null
 
-            val versionSpec = entry.value.asText().trim().takeIf { it.isNotEmpty() }
+            val versionSpec = entry.value.textOrEmpty().takeIf { it.isNotEmpty() }
             val (groupId, artifactId) = packageName.toGroupArtifact()
 
             ParsedDependency(
@@ -54,5 +54,12 @@ class NpmPackageParser {
         } else {
             "npm" to this
         }
+    }
+
+    private fun JsonNode.textOrEmpty(): String = scalarText().trim()
+
+    private fun JsonNode.scalarText(): String = when {
+        isNull || isMissingNode -> ""
+        else -> toString().removeSurrounding("\"")
     }
 }

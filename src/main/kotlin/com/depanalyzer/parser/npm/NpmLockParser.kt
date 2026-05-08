@@ -20,14 +20,13 @@ class NpmLockParser {
 
         val packagesNode = root.path("packages")
         return if (packagesNode.isObject) {
-            parsePackagesFormat(root, packagesNode, directPackageNames)
+            parsePackagesFormat(packagesNode, directPackageNames)
         } else {
             parseLegacyFormat(root.path("dependencies"), directPackageNames)
         }
     }
 
     private fun parsePackagesFormat(
-        root: JsonNode,
         packagesNode: JsonNode,
         directPackageNames: Set<String>
     ): List<DependencyNode> {
@@ -43,16 +42,16 @@ class NpmLockParser {
         packagesNode.properties().forEach { (path, value) ->
             if (!value.isObject || path.isBlank()) return@forEach
 
-            val packageName = value.path("name").asText().trim().ifBlank {
+            val packageName = value.path("name").textOrEmpty().ifBlank {
                 extractPackageNameFromPath(path)
             }
-            val version = value.path("version").asText().trim()
+            val version = value.path("version").textOrEmpty()
             if (packageName.isBlank() || version.isBlank()) return@forEach
 
             val deps = mutableSetOf<String>()
-            deps += value.path("dependencies").propertyNames().asSequence().toSet()
-            deps += value.path("optionalDependencies").propertyNames().asSequence().toSet()
-            deps += value.path("peerDependencies").propertyNames().asSequence().toSet()
+            deps += value.path("dependencies").propertyNames().toSet()
+            deps += value.path("optionalDependencies").propertyNames().toSet()
+            deps += value.path("peerDependencies").propertyNames().toSet()
 
             val entry = LockEntry(packageName = packageName, version = version, dependencies = deps)
             byPath[path] = entry
@@ -66,10 +65,10 @@ class NpmLockParser {
         val rootDeclaredDeps = mutableSetOf<String>()
         val rootPackage = packagesNode.path("")
         if (rootPackage.isObject) {
-            rootDeclaredDeps += rootPackage.path("dependencies").propertyNames().asSequence().toSet()
-            rootDeclaredDeps += rootPackage.path("devDependencies").propertyNames().asSequence().toSet()
-            rootDeclaredDeps += rootPackage.path("optionalDependencies").propertyNames().asSequence().toSet()
-            rootDeclaredDeps += rootPackage.path("peerDependencies").propertyNames().asSequence().toSet()
+            rootDeclaredDeps += rootPackage.path("dependencies").propertyNames().toSet()
+            rootDeclaredDeps += rootPackage.path("devDependencies").propertyNames().toSet()
+            rootDeclaredDeps += rootPackage.path("optionalDependencies").propertyNames().toSet()
+            rootDeclaredDeps += rootPackage.path("peerDependencies").propertyNames().toSet()
         }
 
         val roots = when {
@@ -112,7 +111,7 @@ class NpmLockParser {
 
         fun parseNode(name: String, node: JsonNode, visiting: MutableSet<String>): DependencyNode? {
             if (!node.isObject) return null
-            val version = node.path("version").asText().trim()
+            val version = node.path("version").textOrEmpty()
             if (version.isBlank()) return null
 
             val key = "$name@$version"
@@ -136,10 +135,8 @@ class NpmLockParser {
             return result
         }
 
-        val roots = if (directPackageNames.isNotEmpty()) {
-            directPackageNames
-        } else {
-            dependenciesNode.propertyNames().asSequence().toSet()
+        val roots = directPackageNames.ifEmpty {
+            dependenciesNode.propertyNames().toSet()
         }
 
         return roots.mapNotNull { name ->
@@ -157,6 +154,13 @@ class NpmLockParser {
         } else {
             lastSegment.substringBefore('/')
         }
+    }
+
+    private fun JsonNode.textOrEmpty(): String = scalarText().trim()
+
+    private fun JsonNode.scalarText(): String = when {
+        isNull || isMissingNode -> ""
+        else -> toString().removeSurrounding("\"")
     }
 
     private fun toGroupArtifact(packageName: String): Pair<String, String> {

@@ -167,7 +167,7 @@ class OssIndexClient(
         }
 
         return root.mapNotNull { node ->
-            val coordinates = node.path("coordinates").asText().takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val coordinates = node.path("coordinates").textOrNull() ?: return@mapNotNull null
             val vulnerabilities = node.path("vulnerabilities")
                 .takeIf { it.isArray }
                 ?.mapNotNull(::parseVulnerability)
@@ -183,8 +183,8 @@ class OssIndexClient(
     }
 
     private fun parseVulnerability(node: JsonNode): OssIndexVulnerability? {
-        val id = node.path("id").asText().takeIf { it.isNotBlank() } ?: return null
-        val title = node.path("title").asText().takeIf { it.isNotBlank() } ?: id
+        val id = node.path("id").textOrNull() ?: return null
+        val title = node.path("title").textOrNull() ?: id
 
         return OssIndexVulnerability(
             id = id,
@@ -197,15 +197,14 @@ class OssIndexClient(
 
     private fun JsonNode.textOrNull(): String? {
         if (isNull || isMissingNode) return null
-        return asText().takeIf { it.isNotBlank() }
+        return scalarText().takeIf { it.isNotBlank() }
     }
 
     private fun JsonNode.longOrNull(): Long? {
         if (isNull || isMissingNode) return null
         return when {
             isIntegralNumber -> longValue()
-            isTextual -> asText().toLongOrNull()
-            else -> null
+            else -> scalarText().toLongOrNull()
         }
     }
 
@@ -213,9 +212,13 @@ class OssIndexClient(
         if (isNull || isMissingNode) return null
         return when {
             isNumber -> doubleValue()
-            isTextual -> asText().toDoubleOrNull()
-            else -> null
+            else -> scalarText().toDoubleOrNull()
         }
+    }
+
+    private fun JsonNode.scalarText(): String = when {
+        isNull || isMissingNode -> ""
+        else -> toString().removeSurrounding("\"")
     }
 
     private fun parseAffectedDependency(coordinates: String): AffectedDependency {

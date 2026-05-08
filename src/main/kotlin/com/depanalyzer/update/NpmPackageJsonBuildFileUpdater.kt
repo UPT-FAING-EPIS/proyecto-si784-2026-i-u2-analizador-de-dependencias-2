@@ -1,8 +1,8 @@
 package com.depanalyzer.update
 
 import com.depanalyzer.security.InputSafety
-import tools.jackson.databind.node.ObjectNode
 import tools.jackson.databind.json.JsonMapper
+import tools.jackson.databind.node.ObjectNode
 import java.io.File
 
 class NpmPackageJsonBuildFileUpdater : BuildFileUpdater {
@@ -37,7 +37,7 @@ class NpmPackageJsonBuildFileUpdater : BuildFileUpdater {
         sections.forEach { section ->
             val node = root.path(section)
             if (node is ObjectNode && node.has(packageName)) {
-                val current = node.path(packageName).asText().trim()
+                val current = node.path(packageName).textOrEmpty()
                 val replacement = preservePrefix(current, newVersion)
                 node.put(packageName, replacement)
                 return true
@@ -53,7 +53,7 @@ class NpmPackageJsonBuildFileUpdater : BuildFileUpdater {
             else -> root.putObject("overrides")
         }
 
-        val existing = overrides.path(packageName).asText().trim()
+        val existing = overrides.path(packageName).textOrEmpty()
         if (existing == newVersion) return false
         overrides.put(packageName, newVersion)
         return true
@@ -71,5 +71,12 @@ class NpmPackageJsonBuildFileUpdater : BuildFileUpdater {
             trimmed.startsWith("=") -> "=$newVersion"
             else -> newVersion
         }
+    }
+
+    private fun tools.jackson.databind.JsonNode.textOrEmpty(): String = scalarText().trim()
+
+    private fun tools.jackson.databind.JsonNode.scalarText(): String = when {
+        isNull || isMissingNode -> ""
+        else -> toString().removeSurrounding("\"")
     }
 }
