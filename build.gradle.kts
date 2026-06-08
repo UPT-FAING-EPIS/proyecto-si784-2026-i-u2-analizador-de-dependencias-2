@@ -12,7 +12,7 @@ application {
 }
 
 group = "com.depanalyzer"
-version = "2.0.0"
+version = providers.environmentVariable("JRELEASER_PROJECT_VERSION").orElse("2.0.3-rc.2").get()
 
 repositories {
     mavenCentral()

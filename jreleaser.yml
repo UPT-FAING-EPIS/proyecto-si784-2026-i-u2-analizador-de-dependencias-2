@@ -21,7 +21,8 @@ release:
         - ASSETS
     draft: false
     prerelease:
-      enabled: false
+      enabled: true
+      pattern: .*-rc\..*
     changelog:
       enabled: false
 
@@ -46,7 +47,7 @@ distributions:
 
 packagers:
   brew:
-    active: ALWAYS
+    active: NEVER
     continueOnError: false
     formulaName: depanalyzer
     multiPlatform: true
@@ -58,7 +59,7 @@ packagers:
       username: andre-carbajal
       token: '{{ env.HOMEBREW_TAP_TOKEN }}'
   scoop:
-    active: ALWAYS
+    active: NEVER
     continueOnError: false
     packageName: depanalyzer
     repository:
@@ -69,7 +70,7 @@ packagers:
       username: andre-carbajal
       token: '{{ env.SCOOP_BUCKET_TOKEN }}'
   snap:
-    active: ALWAYS
+    active: NEVER
     continueOnError: false
     packageName: depanalyzer
     repository:
