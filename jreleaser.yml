@@ -58,7 +58,7 @@ packagers:
       username: andre-carbajal
       token: '{{ env.HOMEBREW_TAP_TOKEN }}'
   scoop:
-    active: NEVER
+    active: RELEASE
     continueOnError: false
     packageName: depanalyzer
     repository:
