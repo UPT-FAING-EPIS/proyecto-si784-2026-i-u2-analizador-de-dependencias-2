@@ -5,7 +5,7 @@ project:
   license: MIT
   copyright: 2026 Andre Carbajal
   links:
-    homepage: https://github.com/UPT-FAING-EPIS/proyecto-si784-2026-i-u1-analizador-de-dependencias
+    homepage: https://github.com/UPT-FAING-EPIS/proyecto-si784-2026-i-u2-analizador-de-dependencias-2
   authors:
     - Andre Carbajal
   stereotype: CLI
@@ -13,7 +13,7 @@ project:
 release:
   github:
     owner: UPT-FAING-EPIS
-    name: proyecto-si784-2026-i-u1-analizador-de-dependencias
+    name: proyecto-si784-2026-i-u2-analizador-de-dependencias-2
     overwrite: false
     update:
       enabled: true
