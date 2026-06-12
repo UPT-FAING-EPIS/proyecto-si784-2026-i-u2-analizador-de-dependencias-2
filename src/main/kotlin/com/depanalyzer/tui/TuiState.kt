@@ -80,6 +80,7 @@ data class TuiState(
     val summary: TuiSummary,
     val cursor: Int = 0,
     val scrollOffset: Int = 0,
+    val detailScrollOffset: Int = 0,
     val activeFilter: TuiQuickFilter = TuiQuickFilter.DIRECT,
     val activeTab: TuiTab = TuiTab.DETAIL,
     val statusLine: String = "Listo",
@@ -107,22 +108,30 @@ data class TuiState(
         }
 
     fun moveCursor(delta: Int): TuiState {
-        if (filteredIndexes.isEmpty()) return copy(cursor = 0)
-        return copy(cursor = (cursor + delta).coerceIn(0, filteredIndexes.lastIndex))
+        if (filteredIndexes.isEmpty()) return copy(cursor = 0, detailScrollOffset = 0)
+        val nextCursor = (cursor + delta).coerceIn(0, filteredIndexes.lastIndex)
+        return copy(
+            cursor = nextCursor,
+            detailScrollOffset = if (nextCursor == cursor) detailScrollOffset else 0
+        )
     }
 
     fun ensureCursorBounds(): TuiState {
-        if (filteredIndexes.isEmpty()) return copy(cursor = 0)
+        if (filteredIndexes.isEmpty()) return copy(cursor = 0, detailScrollOffset = 0)
         return copy(cursor = cursor.coerceIn(0, filteredIndexes.lastIndex))
     }
 
     fun cycleFilter(): TuiState {
-        return copy(activeFilter = activeFilter.next(), cursor = 0, scrollOffset = 0)
+        return copy(activeFilter = activeFilter.next(), cursor = 0, scrollOffset = 0, detailScrollOffset = 0)
     }
 
-    fun nextTab(): TuiState = copy(activeTab = activeTab.next())
+    fun nextTab(): TuiState = copy(activeTab = activeTab.next(), detailScrollOffset = 0)
 
-    fun previousTab(): TuiState = copy(activeTab = activeTab.previous())
+    fun previousTab(): TuiState = copy(activeTab = activeTab.previous(), detailScrollOffset = 0)
+
+    fun scrollDetail(delta: Int): TuiState {
+        return copy(detailScrollOffset = (detailScrollOffset + delta).coerceAtLeast(0))
+    }
 
     fun ensureScrollVisible(windowSize: Int): TuiState {
         if (filteredIndexes.isEmpty()) {

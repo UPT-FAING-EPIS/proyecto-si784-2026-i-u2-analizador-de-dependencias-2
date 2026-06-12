@@ -6,6 +6,8 @@ import com.github.ajalt.mordant.input.isCtrlC
 enum class TuiAction {
     MOVE_UP,
     MOVE_DOWN,
+    SCROLL_DETAIL_UP,
+    SCROLL_DETAIL_DOWN,
     UPDATE_SELECTED,
     UPDATE_ALL,
     APPLY_PENDING,
@@ -26,6 +28,10 @@ object TuiKeymap {
     private val shortcuts = listOf(
         TuiShortcut("↑", "Navegar arriba"),
         TuiShortcut("↓", "Navegar abajo"),
+        TuiShortcut("PgUp", "Detalle arriba"),
+        TuiShortcut("PgDn", "Detalle abajo"),
+        TuiShortcut("w", "Detalle arriba"),
+        TuiShortcut("s", "Detalle abajo"),
         TuiShortcut("u", "Actualizar seleccionado"),
         TuiShortcut("U", "Actualizar todo"),
         TuiShortcut("a", "Aplicar pendientes"),
@@ -45,6 +51,8 @@ object TuiKeymap {
         return when {
             key == "arrowup" -> TuiAction.MOVE_UP
             key == "arrowdown" -> TuiAction.MOVE_DOWN
+            key == "pageup" || key == "pgup" || key == "w" -> TuiAction.SCROLL_DETAIL_UP
+            key == "pagedown" || key == "pgdn" || key == "s" -> TuiAction.SCROLL_DETAIL_DOWN
             key == "tab" || key == "arrowright" -> TuiAction.NEXT_TAB
             key == "arrowleft" -> TuiAction.PREVIOUS_TAB
             key == "q" -> TuiAction.QUIT

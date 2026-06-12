@@ -30,6 +30,46 @@ class TuiStateTest {
     }
 
     @Test
+    fun `resets detail scroll when selected dependency changes`() {
+        val entries = (1..3).map {
+            TuiDependencyEntry(coordinate = "g:lib$it", currentVersion = "1.0.0")
+        }
+
+        val state = TuiState(
+            entries = entries,
+            summary = TuiSummary(
+                projectName = "test",
+                outdatedCount = 0,
+                vulnerableCount = 0,
+                totalEntries = entries.size
+            ),
+            detailScrollOffset = 10
+        ).moveCursor(1)
+
+        assertEquals(1, state.cursor)
+        assertEquals(0, state.detailScrollOffset)
+    }
+
+    @Test
+    fun `keeps detail scroll when cursor cannot move`() {
+        val entries = listOf(TuiDependencyEntry(coordinate = "g:lib", currentVersion = "1.0.0"))
+
+        val state = TuiState(
+            entries = entries,
+            summary = TuiSummary(
+                projectName = "test",
+                outdatedCount = 0,
+                vulnerableCount = 0,
+                totalEntries = entries.size
+            ),
+            detailScrollOffset = 10
+        ).moveCursor(1)
+
+        assertEquals(0, state.cursor)
+        assertEquals(10, state.detailScrollOffset)
+    }
+
+    @Test
     fun `cycles quick filter to transitive and filters correctly`() {
         val entries = listOf(
             TuiDependencyEntry(

@@ -6,6 +6,9 @@ import kotlin.test.assertEquals
 class TuiKeymapTest {
     @Test
     fun `registers required shortcuts`() {
-        assertEquals(setOf("↑", "↓", "u", "U", "a", "x", "f", "q"), TuiKeymap.registeredShortcutKeys())
+        assertEquals(
+            setOf("↑", "↓", "PgUp", "PgDn", "w", "s", "u", "U", "a", "x", "f", "q"),
+            TuiKeymap.registeredShortcutKeys()
+        )
     }
 }

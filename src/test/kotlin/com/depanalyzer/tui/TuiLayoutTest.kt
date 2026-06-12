@@ -1,6 +1,8 @@
 package com.depanalyzer.tui
 
+import com.depanalyzer.report.VulnerabilitySeverity
 import org.junit.jupiter.api.Test
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class TuiLayoutTest {
@@ -123,5 +125,67 @@ class TuiLayoutTest {
 
         assertTrue(frame.any { it.contains("Trans.") })
         assertTrue(frame.none { it.contains("Desact.") })
+    }
+
+    @Test
+    fun `uses ascii safe glyphs when unicode is disabled`() {
+        val layout = TuiLayout(TuiTheme(enabled = false), useUnicodeGlyphs = false)
+        val state = TuiState(
+            entries = listOf(
+                TuiDependencyEntry(
+                    coordinate = "org.sample:demo",
+                    currentVersion = "1.0.0",
+                    chainPreview = listOf("org.sample:demo:1.0.0")
+                )
+            ),
+            summary = TuiSummary(
+                projectName = "analisis",
+                outdatedCount = 0,
+                vulnerableCount = 0,
+                totalEntries = 1
+            ),
+            statusLine = "Arbol y navegacion disponibles"
+        )
+
+        val frame = layout.composeFrame(state, width = 80, height = 20)
+
+        assertTrue(frame.any { it.startsWith("+") })
+        assertTrue(frame.any { it.contains("|") })
+        assertFalse(frame.any { it.contains("┌") || it.contains("│") || it.contains("▶") || it.contains("•") })
+        assertTrue(frame.all { line -> line.all { char -> char.code in 32..126 } })
+    }
+
+    @Test
+    fun `scrolls detail panel independently from dependency list`() {
+        val layout = TuiLayout(TuiTheme(enabled = false), useUnicodeGlyphs = false)
+        val longDescription = (1..20).joinToString(" ") { "detalle-$it" }
+        val state = TuiState(
+            entries = listOf(
+                TuiDependencyEntry(
+                    coordinate = "org.sample:demo",
+                    currentVersion = "1.0.0",
+                    vulnerabilities = listOf(
+                        TuiVulnerability(
+                            cveId = "CVE-2026-0001",
+                            severity = VulnerabilitySeverity.HIGH,
+                            cvssScore = 8.1,
+                            description = longDescription
+                        )
+                    )
+                )
+            ),
+            summary = TuiSummary(
+                projectName = "sample",
+                outdatedCount = 0,
+                vulnerableCount = 1,
+                totalEntries = 1
+            ),
+            detailScrollOffset = 6
+        )
+
+        val frame = layout.composeFrame(state, width = 80, height = 16)
+
+        assertFalse(frame.any { it.contains("1.0.0 -> 1.0.0") })
+        assertTrue(frame.any { it.contains("detalle-") })
     }
 }

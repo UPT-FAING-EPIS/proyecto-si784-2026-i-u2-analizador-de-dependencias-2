@@ -259,7 +259,11 @@ class AnalyzeTuiApp(
                             if (state.loadError == null && (!state.isLoading || state.entries.isNotEmpty())) {
                                 viewportRows = layout.contentRows(terminal)
                                 val previousState = state
-                                val handled = handleAction(state, action)
+                                val handled = handleAction(
+                                    state = state,
+                                    action = action,
+                                    detailPageSize = (viewportRows - 2).coerceAtLeast(4)
+                                )
                                 state = handled.first.ensureCursorBounds().ensureScrollVisible(viewportRows)
                                 pendingConfirmation = handled.second
                                 stateChanged = state != previousState || pendingConfirmation != null
@@ -283,10 +287,16 @@ class AnalyzeTuiApp(
         return analyzedReport
     }
 
-    private fun handleAction(state: TuiState, action: TuiAction): Pair<TuiState, PendingConfirmation?> {
+    private fun handleAction(
+        state: TuiState,
+        action: TuiAction,
+        detailPageSize: Int
+    ): Pair<TuiState, PendingConfirmation?> {
         return when (action) {
             TuiAction.MOVE_UP -> Pair(state.moveCursor(-1), null)
             TuiAction.MOVE_DOWN -> Pair(state.moveCursor(1), null)
+            TuiAction.SCROLL_DETAIL_UP -> Pair(state.scrollDetail(-detailPageSize), null)
+            TuiAction.SCROLL_DETAIL_DOWN -> Pair(state.scrollDetail(detailPageSize), null)
             TuiAction.UPDATE_SELECTED -> {
                 val selected = state.selectedEntry
                 val suggestion = selected?.updateSuggestion

@@ -14,6 +14,7 @@ import com.depanalyzer.telemetry.TelemetryEvent
 import com.depanalyzer.tui.AnalyzeTuiApp
 import com.depanalyzer.tui.TerminalCapabilities
 import com.depanalyzer.tui.TerminalCapabilitiesDetector
+import com.depanalyzer.tui.TuiLayout
 import com.depanalyzer.update.*
 import com.github.ajalt.clikt.core.*
 import com.github.ajalt.clikt.parameters.arguments.argument
@@ -114,7 +115,10 @@ private fun defaultJsonOutputPathProvider(@Suppress("UNUSED_PARAMETER") targetPa
 }
 
 private fun defaultTuiRunner(config: TuiLaunchConfig, capabilities: TerminalCapabilities): DependencyReport? {
-    return AnalyzeTuiApp(terminal = Terminal(ansiLevel = capabilities.ansiLevel))
+    return AnalyzeTuiApp(
+        terminal = Terminal(ansiLevel = capabilities.ansiLevel),
+        layout = TuiLayout(useUnicodeGlyphs = capabilities.supportsUnicodeGlyphs)
+    )
         .runAsync(
             initialStatus = config.initialStatus,
             progressHint = config.progressHint,

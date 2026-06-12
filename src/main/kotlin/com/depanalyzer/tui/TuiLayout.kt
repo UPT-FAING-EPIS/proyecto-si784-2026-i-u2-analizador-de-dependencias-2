@@ -11,9 +11,72 @@ data class TuiDimensions(
     val contentRows: Int
 )
 
-class TuiLayout(
-    private val theme: TuiTheme = TuiTheme()
+private data class TuiGlyphs(
+    val topLeft: String,
+    val topRight: String,
+    val bottomLeft: String,
+    val bottomRight: String,
+    val horizontal: String,
+    val vertical: String,
+    val topJoint: String,
+    val middleLeft: String,
+    val middleJoint: String,
+    val middleRight: String,
+    val bottomJoint: String,
+    val selected: String,
+    val bullet: String,
+    val branch: String,
+    val chain: String,
+    val footerHint: String
 ) {
+    companion object {
+        val Unicode = TuiGlyphs(
+            topLeft = "┌",
+            topRight = "┐",
+            bottomLeft = "└",
+            bottomRight = "┘",
+            horizontal = "─",
+            vertical = "│",
+            topJoint = "┬",
+            middleLeft = "├",
+            middleJoint = "┼",
+            middleRight = "┤",
+            bottomJoint = "┴",
+            selected = "▶",
+            bullet = "•",
+            branch = "└",
+            chain = "▶ ",
+            footerHint = " ↑↓ navegar  PgUp/PgDn detalle  u agregar pend.  U agregar todo  a aplicar  x descartar  f filtrar  q salir "
+        )
+
+        val Ascii = TuiGlyphs(
+            topLeft = "+",
+            topRight = "+",
+            bottomLeft = "+",
+            bottomRight = "+",
+            horizontal = "-",
+            vertical = "|",
+            topJoint = "+",
+            middleLeft = "+",
+            middleJoint = "+",
+            middleRight = "+",
+            bottomJoint = "+",
+            selected = ">",
+            bullet = "*",
+            branch = "`",
+            chain = "> ",
+            footerHint = " up/down navegar  PgUp/PgDn detalle  u agregar pend.  U agregar todo  a aplicar  x descartar  f filtrar  q salir "
+        )
+    }
+}
+
+class TuiLayout(
+    private val theme: TuiTheme = TuiTheme(),
+    useUnicodeGlyphs: Boolean = true
+) {
+    private val glyphs = if (useUnicodeGlyphs) TuiGlyphs.Unicode else TuiGlyphs.Ascii
+    private val asciiOnly = !useUnicodeGlyphs
+
     fun contentRows(terminal: Terminal): Int {
         val size = terminal.updateSize()
         return calculateDimensions(size.width, size.height).contentRows
@@ -51,11 +114,12 @@ class TuiLayout(
     internal fun composeFrame(state: TuiState, width: Int = 120, height: Int = 32): List<String> {
         val dim = calculateDimensions(width, height)
         if (state.loadError != null) {
-            return listOf(
+            val lines = listOf(
                 theme.chrome(fit(" dep-analyzer - ${state.summary.projectName} ", dim.width)),
                 theme.scanDanger(fit("Error durante el escaneo: ${state.loadError}", dim.width)),
                 theme.muted(fit("Presiona q para salir", dim.width))
             )
+            return if (asciiOnly) lines.map(::toAscii) else lines
         }
 
         val safeState = if (!state.isTreeTabEnabled && state.activeTab == TuiTab.TREE) {
@@ -75,12 +139,20 @@ class TuiLayout(
         }
         lines += theme.muted(fit(runtimeStatus, dim.width))
 
-        val top = "┌" + "─".repeat(dim.leftInnerWidth) + "┬" + "─".repeat(dim.rightInnerWidth) + "┐"
+        val top = glyphs.topLeft +
+                glyphs.horizontal.repeat(dim.leftInnerWidth) +
+                glyphs.topJoint +
+                glyphs.horizontal.repeat(dim.rightInnerWidth) +
+                glyphs.topRight
         val leftHeader =
             "DEPENDENCIAS (${state.summary.totalEntries}) · ${state.summary.vulnerableCount} CVE · ${state.summary.outdatedCount} desact. · ${state.pendingUpdates.size} pend."
-        val header = "│" + fit(leftHeader, dim.leftInnerWidth) + "│" +
-                buildRightTabsCell(normalizedState, dim.rightInnerWidth) + "│"
-        val separator = "├" + "─".repeat(dim.leftInnerWidth) + "┼" + "─".repeat(dim.rightInnerWidth) + "┤"
+        val header = glyphs.vertical + fit(leftHeader, dim.leftInnerWidth) + glyphs.vertical +
+                buildRightTabsCell(normalizedState, dim.rightInnerWidth) + glyphs.vertical
+        val separator = glyphs.middleLeft +
+                glyphs.horizontal.repeat(dim.leftInnerWidth) +
+                glyphs.middleJoint +
+                glyphs.horizontal.repeat(dim.rightInnerWidth) +
+                glyphs.middleRight
         lines += top
         lines += header
         lines += separator
@@ -92,8 +164,8 @@ class TuiLayout(
                 "ARBOL DE DEPENDENCIAS - $selected"
             }
         }
-        lines += "│" + buildLeftFilterCell(normalizedState, dim.leftInnerWidth) + "│" +
-                theme.section(fit(rightTitle, dim.rightInnerWidth)) + "│"
+        lines += glyphs.vertical + buildLeftFilterCell(normalizedState, dim.leftInnerWidth) + glyphs.vertical +
+                theme.section(fit(rightTitle, dim.rightInnerWidth)) + glyphs.vertical
         lines += separator
 
         val bodyRows = (dim.contentRows - 2).coerceAtLeast(4)
@@ -102,13 +174,17 @@ class TuiLayout(
         for (i in 0 until bodyRows) {
             val left = leftRows.getOrElse(i) { " ".repeat(dim.leftInnerWidth) }
             val right = rightRows.getOrElse(i) { " ".repeat(dim.rightInnerWidth) }
-            lines += "│$left│$right│"
+            lines += "${glyphs.vertical}$left${glyphs.vertical}$right${glyphs.vertical}"
         }
 
-        val bottom = "└" + "─".repeat(dim.leftInnerWidth) + "┴" + "─".repeat(dim.rightInnerWidth) + "┘"
+        val bottom = glyphs.bottomLeft +
+                glyphs.horizontal.repeat(dim.leftInnerWidth) +
+                glyphs.bottomJoint +
+                glyphs.horizontal.repeat(dim.rightInnerWidth) +
+                glyphs.bottomRight
         lines += bottom
         lines += buildFooterLine(normalizedState, dim.width, bodyRows)
-        return lines
+        return if (asciiOnly) lines.map(::toAscii) else lines
     }
 
     private fun buildRightTabsCell(state: TuiState, width: Int): String {
@@ -161,7 +237,7 @@ class TuiLayout(
         for (listIndex in start until end) {
             val entry = state.entries[indexes[listIndex]]
             val selected = listIndex == state.cursor
-            val marker = if (selected) "▶" else "•"
+            val marker = if (selected) glyphs.selected else glyphs.bullet
             val name = fit(entry.coordinate, nameWidth)
             val status = theme.statusBadge(entry, statusWidth, state.pendingUpdates.containsKey(entry.coordinate))
             val plainLine = "$marker $name"
@@ -178,7 +254,9 @@ class TuiLayout(
             TuiTab.DETAIL -> buildDetailRows(state, selected, width)
             TuiTab.TREE -> buildTreeRows(state, selected, width)
         }
-        return rows.take(bodyRows)
+        val maxScroll = (rows.size - bodyRows).coerceAtLeast(0)
+        val start = state.detailScrollOffset.coerceIn(0, maxScroll)
+        return rows.drop(start).take(bodyRows)
     }
 
     private fun buildDetailRows(state: TuiState, selected: TuiDependencyEntry, width: Int): List<String> {
@@ -226,7 +304,7 @@ class TuiLayout(
             selected.chainPreview
         }
         rows += chain.mapIndexed { index, node ->
-            val prefix = if (index == 0) "▶ " else "└ "
+            val prefix = if (index == 0) glyphs.chain else "${glyphs.branch} "
             fit(prefix + node, width)
         }
 
@@ -273,7 +351,7 @@ class TuiLayout(
         }
 
         val hint = state.confirmationPrompt
-            ?: " ↑↓ navegar  u agregar pend.  U agregar todo  a aplicar  x descartar  f filtrar  q salir  tab vista "
+            ?: glyphs.footerHint
         val summary = "[$visible / ${state.filteredIndexes.size}]"
         val base = fit(hint, (width - summary.length).coerceAtLeast(0)) + summary
         return if (state.confirmationPrompt != null) theme.scanWarn(base) else theme.muted(base)
@@ -302,6 +380,29 @@ class TuiLayout(
     private fun fit(text: String, width: Int): String {
         val safe = text.replace("\n", " ")
         return if (safe.length >= width) safe.take(width) else safe.padEnd(width)
+    }
+
+    private fun toAscii(text: String): String {
+        return text
+            .replace("Á", "A")
+            .replace("É", "E")
+            .replace("Í", "I")
+            .replace("Ó", "O")
+            .replace("Ú", "U")
+            .replace("Ñ", "N")
+            .replace("á", "a")
+            .replace("é", "e")
+            .replace("í", "i")
+            .replace("ó", "o")
+            .replace("ú", "u")
+            .replace("ñ", "n")
+            .replace("·", "|")
+            .replace("→", "->")
+            .replace("←", "<-")
+            .replace("↑", "up")
+            .replace("↓", "down")
+            .map { char -> if (char.code in 32..126 || char == '\u001B') char else '?' }
+            .joinToString("")
     }
 }
 
