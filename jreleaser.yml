@@ -21,8 +21,7 @@ release:
         - ASSETS
     draft: false
     prerelease:
-      enabled: true
-      pattern: .*-rc\..*
+      enabled: false
     changelog:
       enabled: false
 
