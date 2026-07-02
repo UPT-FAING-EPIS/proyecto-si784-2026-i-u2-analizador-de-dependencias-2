@@ -291,6 +291,98 @@ depanalyzer update . --dry-run
 depanalyzer update . --only-security
 ```
 
+## Uso como servidor MCP
+
+El repositorio incluye un wrapper MCP en `scripts/depanalyzer-mcp.mjs`. Este servidor permite usar `depanalyzer`
+desde clientes compatibles con Model Context Protocol, por ejemplo Codex, exponiendo el analizador como herramientas.
+
+### Prerrequisitos
+
+- Node.js disponible en `PATH`.
+- JDK 25+ disponible para compilar el proyecto.
+- Variables opcionales:
+  - `OSS_INDEX_TOKEN` para consultas OSS Index.
+  - `NVD_API_KEY` para consultas NVD.
+
+Antes de registrar el MCP, genera la distribucion local:
+
+```powershell
+.\gradlew.bat installDist
+```
+
+En Linux/macOS:
+
+```bash
+./gradlew installDist
+```
+
+El wrapper tambien intenta ejecutar `installDist` automaticamente si no encuentra el binario local.
+
+### Configuracion en Codex
+
+Agrega este bloque a `C:\Users\<tu_usuario>\.codex\config.toml` en Windows, ajustando las rutas si clonaste el repo en
+otra ubicacion:
+
+```toml
+[mcp_servers.depanalyzer]
+command = 'C:\Program Files\nodejs\node.exe'
+args = ['D:\Universidad\proyecto-si784-2026-i-u2-analizador-de-dependencias-2\scripts\depanalyzer-mcp.mjs']
+startup_timeout_sec = 30
+```
+
+Si `node.exe` esta en `PATH`, tambien puedes usar:
+
+```toml
+[mcp_servers.depanalyzer]
+command = 'node'
+args = ['D:\Universidad\proyecto-si784-2026-i-u2-analizador-de-dependencias-2\scripts\depanalyzer-mcp.mjs']
+startup_timeout_sec = 30
+```
+
+Despues de guardar la configuracion, reinicia Codex o abre una nueva sesion para que cargue el servidor MCP.
+
+### Herramientas disponibles
+
+| Herramienta              | Que hace                                                                 |
+|:-------------------------|:-------------------------------------------------------------------------|
+| `analyze_dependencies`   | Ejecuta `depanalyzer analyze <path> --output json --no-color` y devuelve el reporte JSON. |
+| `depanalyzer_help`       | Muestra la ayuda del CLI o de los subcomandos `analyze`, `tui`, `update`. |
+
+Parametros principales de `analyze_dependencies`:
+
+| Parametro        | Tipo    | Descripcion                                      |
+|:-----------------|:--------|:-------------------------------------------------|
+| `projectPath`    | string  | Ruta del proyecto a analizar. Default: este repo. |
+| `dynamic`        | boolean | Fuerza analisis dinamico con Maven/Gradle.       |
+| `offline`        | boolean | Usa analisis estatico.                           |
+| `source`         | string  | `auto`, `oss` o `nvd`.                           |
+| `showChains`     | boolean | Incluye cadenas de vulnerabilidades.             |
+| `treeDepth`      | integer | Limita profundidad del arbol de dependencias.    |
+| `timeoutSeconds` | integer | Timeout del analisis.                            |
+
+Ejemplo de uso desde un cliente MCP:
+
+```json
+{
+  "tool": "analyze_dependencies",
+  "arguments": {
+    "projectPath": "D:\\Universidad\\proyecto-si784-2026-i-u2-analizador-de-dependencias-2",
+    "source": "auto",
+    "showChains": true
+  }
+}
+```
+
+### Prueba rapida del servidor
+
+Puedes verificar que el servidor responde a MCP con este comando desde la raiz del repo:
+
+```powershell
+node -e "const {spawn}=require('child_process'); const p=spawn('node',['scripts/depanalyzer-mcp.mjs']); let out=''; p.stdout.on('data',d=>out+=d); function send(o){const b=JSON.stringify(o); p.stdin.write('Content-Length: '+Buffer.byteLength(b)+'\r\n\r\n'+b)} send({jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-06-18',capabilities:{},clientInfo:{name:'smoke',version:'1'}}}); setTimeout(()=>send({jsonrpc:'2.0',id:2,method:'tools/list'}),100); setTimeout(()=>{p.kill(); console.log(out)},1000);"
+```
+
+La salida debe incluir `depanalyzer-mcp`, `analyze_dependencies` y `depanalyzer_help`.
+
 ## Recetas rapidas
 
 ```bash
